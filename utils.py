@@ -13,7 +13,8 @@ def prepare_for_morph_filter(img):
 def restore_after_morph_filter(img):
     """ Post-processing for binary black on white images after using morphological filter """
 
-    img[np.where(img == 1)] = 255
+    img[np.where(img == 0)] = 255
+    img[np.where(img == 1)] = 0
 
     return img
 
