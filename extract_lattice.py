@@ -1,6 +1,4 @@
-""" Morphological Denoising
-
-Using morphological filter like erosion and dilation to reduce the noise of images.
+""" Lattice extraction using a rank filter
 
 Assumptions:
  - Input images are binary
@@ -15,16 +13,30 @@ import numpy as np
 import json
 import logging
 import argparse
+from scipy.ndimage.filters import rank_filter
 
 import utils
+
+
+def extract_lattice(img, filter_length = 30, rank = 1, size_close=5, **kwargs):
+    """ Actual lattice extraction """   
+
+    maxed_rows = rank_filter(img, -rank, size=(1, filter_length))
+    maxed_cols = rank_filter(img, -rank, size=(filter_length, 1))
+    filtered = np.maximum(np.maximum(img, maxed_rows), maxed_cols)
+    lattice = np.minimum(maxed_rows, maxed_cols) 
+
+    return lattice   
 
 
 def main():
 
     # Parameter #
-    params = dict(    
-        size_open = 3, # size of the opening structure element (opening is erosion followed by dilation)
-        size_close = 2 # size of the closing structure element (closing is dilation followed by erosion)
+    params = dict(
+        size_open = 2,
+        size_close = 8,    
+        filter_length = 40,
+        rank = 1
     )
     #############
 
@@ -78,15 +90,16 @@ def main():
             if img_original is None: # reading failed (e.g. file is not an image)
                 continue
 
-            img = cv2.cvtColor(img_original, cv2.COLOR_BGR2GRAY)
+            img = cv2.cvtColor(img_original, cv2.COLOR_BGR2GRAY)  
             img = utils.prepare_for_morph_filter(img)
+            denoised = utils.morph_denoise(img, **params)          
+            denoised = utils.restore_after_morph_filter(denoised)
 
-            img = utils.morph_denoise(img, **params)
-
-            img = utils.restore_after_morph_filter(img)     
+            lattice = extract_lattice(denoised, **params)         
 
             cv2.imwrite(os.path.join(output_path, input_name), img_original)
-            cv2.imwrite(os.path.join(output_path, input_name_base + "_processed.tiff"), img)
+            cv2.imwrite(os.path.join(output_path, input_name_base + "_denoised.tiff"), denoised)
+            cv2.imwrite(os.path.join(output_path, input_name_base + "_lattice.tiff"), lattice)
 
             duration = time.time() - start
             logging.info("Processed {0} (Duration: {1:.3f} s)".format(input_name, duration)) 
