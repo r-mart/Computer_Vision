@@ -60,6 +60,8 @@ def main():
                         format='%(asctime)s - %(levelname)s: %(message)s', 
                         datefmt='%Y-%m-%d %H:%M:%S')     
 
+    logging.info("Current git revision: {}".format(utils.get_git_revision_hash()))
+
     # override parameter if external ones are given
     param_path = os.path.join(input_path, args.param_file)
     if os.path.isfile(param_path):
@@ -67,7 +69,7 @@ def main():
             params = json.load(param_file)
         logging.info("Using parameter given in {}".format(param_path))
     else:
-        logging.info("Using local parameter.")          
+        logging.info("Using local parameter")          
 
     # dump used parameter
     with open(os.path.join(output_path, 'params.json'), 'w') as f:

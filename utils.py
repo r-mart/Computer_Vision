@@ -1,4 +1,6 @@
+import subprocess
 import numpy as np
+
 
 def prepare_for_morph_filter(img):
     """ Prepares binary black on white images for using morphological filter """
@@ -14,3 +16,6 @@ def restore_after_morph_filter(img):
     img[np.where(img == 1)] = 255
 
     return img
+
+def get_git_revision_hash():
+    return subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode()
