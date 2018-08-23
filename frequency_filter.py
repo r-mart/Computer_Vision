@@ -67,15 +67,60 @@ def high_pass_filter(img, high_pass_fraction = 0.3, **kwargs):
     img_back = np.fft.ifft2(f_ishift)
     img_back = np.abs(img_back)
 
-    return img_back, magnitude_spectrum      
+    return img_back, magnitude_spectrum     
+
+
+def middle_pass_filter(img, high_pass_fraction = 0.3, low_pass_fraction = 0.3, **kwargs):
+
+    rows, cols = img.shape
+    crow, ccol = rows // 2 , cols // 2 # center point
+
+    row_lp = int(crow * low_pass_fraction)
+    col_lp = int(ccol * low_pass_fraction)        
+
+    row_hp = int(crow * high_pass_fraction)
+    col_hp = int(ccol * high_pass_fraction)
+
+    # Transform to Fourier space
+    f = np.fft.fft2(img)
+    fshift = np.fft.fftshift(f)
+    magnitude_spectrum = 20*np.log(np.abs(fshift))
+
+    # manipulation
+
+    # low pass with elliptical kernel
+    mask_lp = np.zeros((rows, cols),np.uint8)
+    ellipse = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*col_lp, 2*row_lp)) # col, row are inverted between openCV and numpy
+    mask_lp[crow-row_lp:crow+row_lp, ccol-col_lp:ccol+col_lp] = ellipse    
+
+    # high pass with elliptical kernel
+    mask_hp = np.ones((rows, cols), np.uint8)
+    ellipse = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*col_hp, 2*row_hp)) # col, row are inverted between openCV and numpy
+    ellipse = np.logical_not(ellipse)
+    mask_hp[crow-row_hp:crow+row_hp, ccol-col_hp:ccol+col_hp] = ellipse
+
+    mask = np.logical_and(mask_lp, mask_hp)
+
+    fshift = fshift * mask
+
+    # Transform back
+    f_ishift = np.fft.ifftshift(fshift)
+    img_back = np.fft.ifft2(f_ishift)
+    img_back = np.abs(img_back)
+
+    # prepare mask for inspection
+    mask = mask.astype(np.uint8)
+    mask[np.where(mask == 1)] = 255
+
+    return img_back, magnitude_spectrum, mask      
 
 
 def main():
 
     # Parameter #
     params = dict(
-        high_pass_fraction = 0.3, # only frequencies higher than this fraction of the fourier domain image will pass
-        low_pass_fraction = 0.3 # only frequencies lower than this fraction of the fourier domain image will pass
+        high_pass_fraction = 0.15, # only frequencies higher than this fraction of the fourier domain image will pass
+        low_pass_fraction = 0.4 # only frequencies lower than this fraction of the fourier domain image will pass
     )
     #############
 
@@ -133,20 +178,23 @@ def main():
 
             low_pass, fourier_spectrum = low_pass_filter(img, **params)         
             high_pass, _ = high_pass_filter(img, **params) 
-            high_low_pass, low_pass_spectrum = high_pass_filter(low_pass, **params)
+            middle_pass, _, middle_mask = middle_pass_filter(img, **params)
 
             # OTSU Thresholding
-            high_low_pass = high_low_pass.astype(np.uint8)
-            ret, high_low_pass_otsu = cv2.threshold(high_low_pass, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            low_pass = low_pass.astype(np.uint8)
+            ret, low_pass_otsu = cv2.threshold(low_pass, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
+            middle_pass = middle_pass.astype(np.uint8)
+            ret, middle_pass_otsu = cv2.threshold(middle_pass, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
             cv2.imwrite(os.path.join(output_path, input_name), img_original)
             cv2.imwrite(os.path.join(output_path, input_name_base + "_fourier_spectrum.tiff"), fourier_spectrum)
-            cv2.imwrite(os.path.join(output_path, input_name_base + "_low_pass_spectrum.tiff"), low_pass_spectrum)
             cv2.imwrite(os.path.join(output_path, input_name_base + "_low_pass.tiff"), low_pass)
             cv2.imwrite(os.path.join(output_path, input_name_base + "_high_pass.tiff"), high_pass)
-            cv2.imwrite(os.path.join(output_path, input_name_base + "_high_low_pass.tiff"), high_low_pass)
-            cv2.imwrite(os.path.join(output_path, input_name_base + "_high_low_pass_otsu.tiff"), high_low_pass_otsu)
+            cv2.imwrite(os.path.join(output_path, input_name_base + "_middle_pass.tiff"), middle_pass)
+            cv2.imwrite(os.path.join(output_path, input_name_base + "_middle_mask.tiff"), middle_mask)
+            cv2.imwrite(os.path.join(output_path, input_name_base + "_middle_pass_otsu.tiff"), middle_pass_otsu)
+            cv2.imwrite(os.path.join(output_path, input_name_base + "_low_pass_otsu.tiff"), low_pass_otsu)
 
             duration = time.time() - start
             logging.info("Processed {0} (Duration: {1:.3f} s)".format(input_name, duration)) 
